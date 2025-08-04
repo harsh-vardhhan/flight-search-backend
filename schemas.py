@@ -16,7 +16,8 @@ class FlightBase(BaseModel):
     duration: str
     flight_type: str
     price_inr: int
-    
+    link: str
+
     class Config:
         from_attributes = True
 

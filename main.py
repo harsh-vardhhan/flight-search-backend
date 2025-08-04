@@ -1,9 +1,9 @@
 # main.py
 
+from contextlib import asynccontextmanager
+from datetime import timedelta, datetime
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from contextlib import asynccontextmanager
-from datetime import date, timedelta, datetime # Import date, timedelta, datetime
 
 import crud
 import models
@@ -12,13 +12,12 @@ import llm_logic
 from database import SessionLocal, engine
 from query_classifier import is_flight_related_query
 
+# ... (keep initialization and lifespan/get_db functions as they are) ...
 models.Base.metadata.create_all(bind=engine)
-
 intent_extraction_chain = llm_logic.get_intent_extraction_chain()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # ... (lifespan function remains the same) ...
     print("Application startup...")
     db = SessionLocal()
     try:
@@ -28,18 +27,16 @@ async def lifespan(app: FastAPI):
     yield
     print("Application shutdown...")
 
-
 app = FastAPI(lifespan=lifespan)
 
 def get_db():
-    # ... (get_db function remains the same) ...
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-# --- UPDATED: The main endpoint with date handling logic ---
+# --- UPDATED: The main endpoint with more flexible date handling ---
 @app.post("/transcript", response_model=schemas.ApiResponse)
 async def handle_transcript(
     request: schemas.TranscriptRequest, db: Session = Depends(get_db)
@@ -58,46 +55,49 @@ async def handle_transcript(
 
             all_flights = []
 
-            # --- NEW DATE LOGIC ---
-            # 1. Determine the outbound date. Default to today if not specified by the LLM.
-            outbound_date = None
+            # --- UPDATED DATE LOGIC ---
+            # 1. Determine the target date. It can now be None.
+            outbound_target_date = None
             if params.start_date:
-                outbound_date = datetime.strptime(params.start_date, '%Y-%m-%d').date()
-            else:
-                outbound_date = date.today() # Default to today
-            
-            # 2. Find the outbound flight
+                outbound_target_date = datetime.strptime(params.start_date, '%Y-%m-%d').date()
+            # If params.start_date is None, we leave outbound_target_date as None.
+            # We NO LONGER default to date.today().
+
+            # 2. Find the outbound flight. If date is None, it finds the cheapest overall.
             outbound_flights = crud.get_flights_by_params(
                 db=db,
                 origin=params.origin,
                 destination=params.destination,
                 limit=params.limit_per_leg,
-                on_date=outbound_date # Pass the date to the query
+                on_date=outbound_target_date # Pass the date (or None) to the query
             )
+
             if outbound_flights:
                 all_flights.extend(outbound_flights)
+                
+                actual_outbound_date = outbound_flights[0].date
 
-            # 3. For round trips, calculate return date and find the return flight
-            if params.trip_type == "round_trip":
-                return_date = None
-                # Calculate return date if duration is known
-                if params.trip_duration_days:
-                    return_date = outbound_date + timedelta(days=params.trip_duration_days)
-
-                inbound_flights = crud.get_flights_by_params(
-                    db=db,
-                    origin=params.destination,
-                    destination=params.origin,
-                    limit=params.limit_per_leg,
-                    on_date=return_date # Pass the calculated return date
-                )
-                if inbound_flights:
-                    all_flights.extend(inbound_flights)
+                if params.trip_type == "round_trip":
+                    # (The return logic is already correct and does not need changes)
+                    return_target_date = None
+                    if params.trip_duration_days:
+                        return_target_date = actual_outbound_date + timedelta(days=params.trip_duration_days)
+                        inbound_flights = crud.get_flights_by_params(
+                            db=db, origin=params.destination, destination=params.origin,
+                            limit=params.limit_per_leg, on_date=return_target_date
+                        )
+                        if inbound_flights: all_flights.extend(inbound_flights)
+                    else:
+                        inbound_flights = crud.get_flights_by_params(
+                            db=db, origin=params.destination, destination=params.origin,
+                            limit=params.limit_per_leg, after_date=actual_outbound_date
+                        )
+                        if inbound_flights: all_flights.extend(inbound_flights)
             
-            # (Your debugging print statement from before)
+            # (Debugging print statement)
             print("\n--- [DEBUG] Final Flights to be Returned ---")
             if not all_flights:
-                print("No flights found on the specified dates.")
+                print("No flights found matching the criteria.")
             else:
                 for i, flight in enumerate(all_flights):
                     print(
@@ -118,10 +118,8 @@ async def handle_transcript(
         except Exception as e:
             print(f"An error occurred in the flight query logic: {e}")
             raise HTTPException(
-                status_code=500,
-                detail=f"An error occurred in the flight query logic: {e}"
+                status_code=500, detail=f"An error occurred in the flight query logic: {e}"
             )
-
     else:
         return schemas.ApiResponse(
             status="success",
