@@ -1,3 +1,4 @@
+# query_classifier.py
 from difflib import SequenceMatcher
 
 def get_fuzzy_matches(word: str, keywords: set, threshold: float = 0.75) -> bool:

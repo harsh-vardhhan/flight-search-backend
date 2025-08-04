@@ -1,28 +1,24 @@
+# main.py
+
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
-from langchain_community.utilities import SQLDatabase
 from contextlib import asynccontextmanager
+from datetime import date, timedelta, datetime # Import date, timedelta, datetime
 
 import crud
 import models
 import schemas
 import llm_logic
-from strip_think_tags import strip_think_tags
-from clean_sql_query import clean_sql_query
 from database import SessionLocal, engine
-from query_classifier import is_flight_related_query  # Import the new classifier
+from query_classifier import is_flight_related_query
 
 models.Base.metadata.create_all(bind=engine)
 
-# --- Database and LLM Chain Initialization ---
-db_for_langchain = SQLDatabase(engine=engine)
-# Remove the query classifier chain since we're using the function instead
-text_to_sql_chain = llm_logic.get_text_to_sql_chain(db_for_langchain)
-
+intent_extraction_chain = llm_logic.get_intent_extraction_chain()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # This code runs on application startup
+    # ... (lifespan function remains the same) ...
     print("Application startup...")
     db = SessionLocal()
     try:
@@ -30,77 +26,107 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
     yield
-    # This code runs on application shutdown
     print("Application shutdown...")
 
 
-# Create the FastAPI app instance with the lifespan event handler
 app = FastAPI(lifespan=lifespan)
 
-
-# Dependency to get a database session
 def get_db():
+    # ... (get_db function remains the same) ...
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-
+# --- UPDATED: The main endpoint with date handling logic ---
 @app.post("/transcript", response_model=schemas.ApiResponse)
 async def handle_transcript(
     request: schemas.TranscriptRequest, db: Session = Depends(get_db)
 ):
-    """
-    Main endpoint to process user's voice transcript.
-    1. Classifies the query using fuzzy matching.
-    2. If flight-related, generates and executes an SQL query.
-    3. Returns the results.
-    """
     user_query = request.text
     print(f"Received query: {user_query}")
 
-    # 1. Classify the query using the new function
     is_flight_related = is_flight_related_query(user_query)
     query_type = "flight_related" if is_flight_related else "other"
     print(f"Classified as: {query_type}")
 
-    # 2. Handle based on classification
     if is_flight_related:
         try:
-            # Generate SQL query from the user's text
-            sql_query_response = await text_to_sql_chain.ainvoke({"question": user_query})
-            stripped_sql_query = strip_think_tags(sql_query_response)
-            sql_query = clean_sql_query(stripped_sql_query)
-            print(f"Generated SQL: {sql_query}")
+            params = await intent_extraction_chain.ainvoke({"query": user_query})
+            print(f"Extracted Intent: {params}")
 
-            # Execute the SQL query
-            results = crud.execute_sql_query(db, sql_query)
+            all_flights = []
+
+            # --- NEW DATE LOGIC ---
+            # 1. Determine the outbound date. Default to today if not specified by the LLM.
+            outbound_date = None
+            if params.start_date:
+                outbound_date = datetime.strptime(params.start_date, '%Y-%m-%d').date()
+            else:
+                outbound_date = date.today() # Default to today
             
-            if results is None:
-                 raise HTTPException(status_code=500, detail="Failed to execute SQL query.")
+            # 2. Find the outbound flight
+            outbound_flights = crud.get_flights_by_params(
+                db=db,
+                origin=params.origin,
+                destination=params.destination,
+                limit=params.limit_per_leg,
+                on_date=outbound_date # Pass the date to the query
+            )
+            if outbound_flights:
+                all_flights.extend(outbound_flights)
+
+            # 3. For round trips, calculate return date and find the return flight
+            if params.trip_type == "round_trip":
+                return_date = None
+                # Calculate return date if duration is known
+                if params.trip_duration_days:
+                    return_date = outbound_date + timedelta(days=params.trip_duration_days)
+
+                inbound_flights = crud.get_flights_by_params(
+                    db=db,
+                    origin=params.destination,
+                    destination=params.origin,
+                    limit=params.limit_per_leg,
+                    on_date=return_date # Pass the calculated return date
+                )
+                if inbound_flights:
+                    all_flights.extend(inbound_flights)
+            
+            # (Your debugging print statement from before)
+            print("\n--- [DEBUG] Final Flights to be Returned ---")
+            if not all_flights:
+                print("No flights found on the specified dates.")
+            else:
+                for i, flight in enumerate(all_flights):
+                    print(
+                        f"  Flight {i+1}: "
+                        f"Date='{flight.date}', "
+                        f"Origin='{flight.origin}', "
+                        f"Destination='{flight.destination}', "
+                        f"Price=₹{flight.price_inr}"
+                    )
+            print("--------------------------------------------\n")
 
             return schemas.ApiResponse(
                 status="success",
                 query_type="flight_related",
-                sql_query=sql_query.strip(),
-                data=results
+                sql_query=f"Intent: {str(params)}",
+                data=all_flights,
             )
         except Exception as e:
             print(f"An error occurred in the flight query logic: {e}")
-            return schemas.ApiResponse(
-                status="error",
-                query_type="flight_related",
-                data=f"Sorry, I encountered an error processing your flight request: {e}"
+            raise HTTPException(
+                status_code=500,
+                detail=f"An error occurred in the flight query logic: {e}"
             )
+
     else:
-        # If not flight-related, return a simple message
         return schemas.ApiResponse(
             status="success",
             query_type="other",
-            data="This assistant can only help with flight-related queries."
+            data="This assistant can only help with flight-related queries.",
         )
 
-@app.get("/")
-def read_root():
-    return {"message": "RupeeTravel RAG Backend is running"}
+# ... (keep the rest of your main.py file) ...

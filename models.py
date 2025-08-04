@@ -1,3 +1,4 @@
+# models.py
 from sqlalchemy import Boolean, Column, Integer, String, Float, Date
 from sqlalchemy.types import Date as SQLDate
 from database import Base

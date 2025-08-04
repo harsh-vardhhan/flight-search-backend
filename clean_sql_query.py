@@ -1,3 +1,4 @@
+# clean_sql_query.py
 import re
 
 def clean_sql_query(query: str) -> str:
