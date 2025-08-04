@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from langchain_community.utilities import SQLDatabase
 from contextlib import asynccontextmanager
 
-# CORRECTED: Changed relative imports to direct imports for the main entry file.
 import crud
 import models
 import schemas
@@ -13,33 +12,6 @@ from clean_sql_query import clean_sql_query
 from database import SessionLocal, engine
 from query_classifier import is_flight_related_query  # Import the new classifier
 
-
-# Create all database tables
-models.Base.metadata.create_all(bind=engine)
-
-# --- Database and LLM Chain Initialization ---
-db_for_langchain = SQLDatabase(engine=engine)
-# Remove the query classifier chain since we're using the function instead
-text_to_sql_chain = llm_logic.get_text_to_sql_chain(db_for_langchain)
-
-
-from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
-from langchain_community.utilities import SQLDatabase
-from contextlib import asynccontextmanager
-
-# CORRECTED: Changed relative imports to direct imports for the main entry file.
-import crud
-import models
-import schemas
-import llm_logic
-from strip_think_tags import strip_think_tags
-from clean_sql_query import clean_sql_query
-from database import SessionLocal, engine
-from query_classifier import is_flight_related_query  # Import the new classifier
-
-
-# Create all database tables
 models.Base.metadata.create_all(bind=engine)
 
 # --- Database and LLM Chain Initialization ---
