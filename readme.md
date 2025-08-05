@@ -1,5 +1,8 @@
 # RupeeTravel - Conversational Query Interface
 
+<img width="1334" height="816" alt="screens" src="https://github.com/user-attachments/assets/d9553737-2ab9-4088-8549-74dae07a1ead" />
+
+
 RupeeTravel is a backend API for conversational flight search, powered by an LLM and a local flight database. Users can interact using natural language queries to find flights, get prices, and specify trip details.
 
 ## Features
