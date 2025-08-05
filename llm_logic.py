@@ -1,12 +1,11 @@
 # llm_logic.py
 
-import os
-from datetime import date, timedelta # <-- Make sure timedelta is imported
+from datetime import date, timedelta
+from typing import Literal, Optional
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
-from langchain_core.pydantic_v1 import BaseModel, Field
-from typing import Literal, Optional
+from pydantic import BaseModel, Field
 
 # Load environment variables
 load_dotenv()
