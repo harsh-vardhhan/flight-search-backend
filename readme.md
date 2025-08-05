@@ -9,7 +9,10 @@ RupeeTravel is a backend API for conversational flight search, powered by an LLM
 - **Guardrails:** Python logic corrects common LLM extraction mistakes for reliability.
 - **SQLite Database:** Stores flight data locally for fast queries.
 - **FastAPI Backend:** RESTful API endpoints for integration.
-- **Automatic Database Population:** Loads flight data from `flight-price.json` on startup.
+- **Automatic Database Population:** Loads flight## Frontend
+
+A companion frontend for RupeeTravel is available at:  
+[https://github.com/harsh-vardhhan/flight-search-frontend](https://github.com/harsh-vardhhan/flight-search-frontend) data from `flight-price.json` on startup.
 
 ## Tech Stack
 
