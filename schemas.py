@@ -1,8 +1,8 @@
 # schemas.py
 
+from pydantic import BaseModel, Field
 from datetime import date
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
 
 class TranscriptRequest(BaseModel):
     text: str
@@ -22,22 +22,29 @@ class FlightBase(BaseModel):
     class Config:
         from_attributes = True
 
-# --- NEW: Moved from llm_logic.py to its correct home ---
+# --- This is the correct and only location for this class ---
 class FlightSearchParameters(BaseModel):
     """
     The structured representation of the user's flight search query intent.
     """
-    trip_type: Literal["one_way", "round_trip"] = Field(..., description="The type of trip. Must be 'one_way' or 'round_trip'.")
-    origin: str = Field(..., description="The starting city or airport for the flight. This is a required field.")
-    destination: str = Field(..., description="The destination city or airport for the flight. This is a required field.")
+    # Make essential fields optional so the LLM can ask for clarification
+    trip_type: Optional[Literal["one_way", "round_trip"]] = Field(None)
+    origin: Optional[str] = Field(None)
+    destination: Optional[str] = Field(None)
+    
+    # Optional fields for more detailed queries
     departure_date_start: Optional[str] = Field(None)
     departure_date_end: Optional[str] = Field(None)
     trip_duration_days: Optional[int] = Field(None)
-    limit_per_leg: int = Field(1)
+    limit_per_leg: int = Field(1, description="Defaults to 1 for 'cheapest'.")
 
+    # Field for the LLM to ask for more info
+    clarification_needed: Optional[str] = Field(
+        None, description="If essential information is missing, provide a question for the user here."
+    )
 
 class ApiResponse(BaseModel):
     status: str
     query_type: str
     sql_query: str | None = None
-    data: list[FlightBase] | str | FlightSearchParameters # Allow data to also be the search params for debugging if needed
+    data: list[FlightBase] | str | FlightSearchParameters
