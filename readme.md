@@ -77,10 +77,3 @@ Configure your `.env` file for any required secrets or LLM settings.
 ## License
 
 MIT
-
----
-
-For more details, see the source files:
-- [main.py](main.py)
-- [llm_logic.py](llm_logic.py)
--
