@@ -12,7 +12,6 @@ import llm_logic
 from database import SessionLocal, engine
 from query_classifier import is_flight_related_query
 
-# ... (keep initialization and lifespan/get_db functions as they are) ...
 models.Base.metadata.create_all(bind=engine)
 intent_extraction_chain = llm_logic.get_intent_extraction_chain()
 
@@ -36,7 +35,6 @@ def get_db():
     finally:
         db.close()
 
-# --- UPDATED: The main endpoint with more flexible date handling ---
 @app.post("/transcript", response_model=schemas.ApiResponse)
 async def handle_transcript(
     request: schemas.TranscriptRequest, db: Session = Depends(get_db)
@@ -55,42 +53,37 @@ async def handle_transcript(
 
             all_flights = []
 
-            # --- UPDATED DATE LOGIC ---
-            # 1. Determine the target date. It can now be None.
-            outbound_target_date = None
-            if params.start_date:
-                outbound_target_date = datetime.strptime(params.start_date, '%Y-%m-%d').date()
-            # If params.start_date is None, we leave outbound_target_date as None.
-            # We NO LONGER default to date.today().
+            # --- UPDATED DATE LOGIC TO USE RANGES ---
+            dep_start = datetime.strptime(params.departure_date_start, '%Y-%m-%d').date() if params.departure_date_start else None
+            dep_end = datetime.strptime(params.departure_date_end, '%Y-%m-%d').date() if params.departure_date_end else None
 
-            # 2. Find the outbound flight. If date is None, it finds the cheapest overall.
+            # Find the cheapest outbound flight within the specified range (or on any date if range is None)
             outbound_flights = crud.get_flights_by_params(
                 db=db,
                 origin=params.origin,
                 destination=params.destination,
                 limit=params.limit_per_leg,
-                on_date=outbound_target_date # Pass the date (or None) to the query
+                departure_start=dep_start, # Pass the range start
+                departure_end=dep_end      # Pass the range end
             )
 
+            # (The return logic remains the same, as it's already robust)
             if outbound_flights:
                 all_flights.extend(outbound_flights)
-                
                 actual_outbound_date = outbound_flights[0].date
 
                 if params.trip_type == "round_trip":
-                    # (The return logic is already correct and does not need changes)
-                    return_target_date = None
                     if params.trip_duration_days:
                         return_target_date = actual_outbound_date + timedelta(days=params.trip_duration_days)
                         inbound_flights = crud.get_flights_by_params(
                             db=db, origin=params.destination, destination=params.origin,
-                            limit=params.limit_per_leg, on_date=return_target_date
+                            limit=params.limit_per_leg, departure_start=return_target_date, departure_end=return_target_date # Search for an exact date
                         )
                         if inbound_flights: all_flights.extend(inbound_flights)
                     else:
                         inbound_flights = crud.get_flights_by_params(
                             db=db, origin=params.destination, destination=params.origin,
-                            limit=params.limit_per_leg, after_date=actual_outbound_date
+                            limit=params.limit_per_leg, after_date=actual_outbound_date # Search after the outbound date
                         )
                         if inbound_flights: all_flights.extend(inbound_flights)
             
@@ -100,13 +93,7 @@ async def handle_transcript(
                 print("No flights found matching the criteria.")
             else:
                 for i, flight in enumerate(all_flights):
-                    print(
-                        f"  Flight {i+1}: "
-                        f"Date='{flight.date}', "
-                        f"Origin='{flight.origin}', "
-                        f"Destination='{flight.destination}', "
-                        f"Price=₹{flight.price_inr}"
-                    )
+                    print(f"  Flight {i+1}: Date='{flight.date}', Origin='{flight.origin}', Destination='{flight.destination}', Price=₹{flight.price_inr}")
             print("--------------------------------------------\n")
 
             return schemas.ApiResponse(
@@ -116,15 +103,9 @@ async def handle_transcript(
                 data=all_flights,
             )
         except Exception as e:
+            # ... (error handling) ...
             print(f"An error occurred in the flight query logic: {e}")
-            raise HTTPException(
-                status_code=500, detail=f"An error occurred in the flight query logic: {e}"
-            )
+            raise HTTPException(status_code=500, detail=f"An error occurred in the flight query logic: {e}")
     else:
-        return schemas.ApiResponse(
-            status="success",
-            query_type="other",
-            data="This assistant can only help with flight-related queries.",
-        )
-
-# ... (keep the rest of your main.py file) ...
+        # ... (other logic) ...
+        return schemas.ApiResponse(status="success", query_type="other", data="This assistant can only help with flight-related queries.")

@@ -31,33 +31,37 @@ def populate_db_from_json(db: Session, json_path: str = "flight-price.json"):
     print(f"Successfully populated DB with {len(flight_data)} records.")
 
 
-# --- UPDATED: The function now also accepts an 'after_date' parameter ---
 def get_flights_by_params(
     db: Session,
     origin: str,
     destination: str,
     limit: int,
-    on_date: Optional[date] = None,
-    after_date: Optional[date] = None # <-- NEW PARAMETER
+    departure_start: Optional[date] = None, # <-- NEW
+    departure_end: Optional[date] = None,   # <-- NEW
+    after_date: Optional[date] = None
 ) -> list[models.Flight]:
     """
-    Safely queries for flights, now with an optional 'on_date' for exact matches
-    or 'after_date' for finding the cheapest flight after a specific date.
+    Safely queries for flights.
+    - If departure_start and departure_end are provided, it searches within that range.
+    - If only after_date is provided, it searches for return flights after that date.
     """
     query = (
         db.query(models.Flight)
         .filter(models.Flight.origin == origin, models.Flight.destination == destination)
     )
 
-    # Add the date filter based on the provided parameters
-    if on_date:
-        # Use for exact date matches
-        query = query.filter(models.Flight.date == on_date)
+    # --- NEW DATE FILTERING LOGIC ---
+    if departure_start and departure_end:
+        if departure_start == departure_end:
+            # If start and end are the same, it's a query for an exact date
+            query = query.filter(models.Flight.date == departure_start)
+        else:
+            # If they are different, it's a range query
+            query = query.filter(models.Flight.date.between(departure_start, departure_end))
     elif after_date:
-        # <-- NEW LOGIC
-        # Use for finding the cheapest flight *after* a specific date
+        # This is used for the return leg
         query = query.filter(models.Flight.date > after_date)
+    
+    # If no date parameters are given, it searches all dates (for "cheapest overall").
 
     return query.order_by(models.Flight.price_inr.asc()).limit(limit).all()
-
-# ... (keep the old execute_sql_query function if you wish) ...
