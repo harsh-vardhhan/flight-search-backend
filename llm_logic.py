@@ -41,7 +41,7 @@ SCHEMA FIELD RULES - FOLLOW EXACTLY:
 1. trip_type: Must be EXACTLY 'one_way' or 'round_trip' (with underscore)
    - "round trip", "return", "return trip", "both ways" → 'round_trip'
    - "one way", "single", "just going" → 'one_way'
-   - If not specified, default to 'round_trip'
+   - If trip type is NOT clearly specified, leave as null and ask for clarification
 
 2. origin: Extract the departure city/airport
    - "from New Delhi" → "New Delhi"
@@ -62,24 +62,18 @@ SCHEMA FIELD RULES - FOLLOW EXACTLY:
    - "tomorrow" → {(today + timedelta(days=1)).strftime('%Y-%m-%d')}
 
 CLARIFICATION RULE:
-If the user's query is missing essential information like 'origin', 'destination', you MUST NOT guess.
+If the user's query is missing essential information like 'origin', 'destination', or 'trip_type', you MUST NOT guess.
 Instead, leave the missing fields as null and fill the 'clarification_needed' field with a friendly question asking for the missing information.
 
-COMMON QUERY PATTERNS TO HANDLE:
-- "cheapest flight from X to Y" → trip_type='round_trip', limit_per_leg=1
-- "find flights from X to Y" → trip_type='round_trip', limit_per_leg=3
-- "one way ticket to X" → trip_type='one_way'
-- "round trip to X" → trip_type='round_trip'
+TRIP TYPE CLARIFICATION:
+- If the query says "flight from X to Y" or "cheapest flight from X to Y" without specifying "round trip", "return", "one way", etc., this is AMBIGUOUS.
+- You must ask: "Would you like a one-way flight or a round-trip flight from [origin] to [destination]?"
 
-EXAMPLES:
-Query: "find the cheapest flight from New Delhi to Hanoi"
-→ trip_type='round_trip', origin='New Delhi', destination='Hanoi', limit_per_leg=1
-
-Query: "cheapest one way from Mumbai to Bangkok"
-→ trip_type='one_way', origin='Mumbai', destination='Bangkok', limit_per_leg=1
-
-Query: "round trip from Delhi to Singapore"
-→ trip_type='round_trip', origin='New Delhi', destination='Singapore', limit_per_leg=3
+TRIP TYPE DETECTION LOGIC:
+- ONLY set trip_type if the user explicitly mentions direction keywords
+- Explicit round-trip indicators: "round trip", "return", "return trip", "both ways", "back and forth"
+- Explicit one-way indicators: "one way", "single", "just going", "no return"
+- If NO explicit trip type indicators are found, leave trip_type as null and ask for clarification
 
 EXTRACTION RULES:
 - If the query is complete, extract all the information into the other fields and leave 'clarification_needed' as null.
