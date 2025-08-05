@@ -1,12 +1,11 @@
 # llm_logic.py
 
-from typing import Literal, Optional
 from datetime import date, timedelta
 import calendar
 from dotenv import load_dotenv
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
-from pydantic import BaseModel, Field
+from schemas import FlightSearchParameters
 
 # Load environment variables
 load_dotenv()
@@ -16,16 +15,6 @@ llm = ChatOllama(
             model="qwen3:4b",
             temperature=0.2,
         )
-
-# Pydantic model (unchanged)
-class FlightSearchParameters(BaseModel):
-    trip_type: Literal["one_way", "round_trip"] = Field(..., description="The type of trip. Must be 'one_way' or 'round_trip'.")
-    origin: str = Field(..., description="The starting city or airport for the flight. This is a required field.")
-    destination: str = Field(..., description="The destination city or airport for the flight. This is a required field.")
-    departure_date_start: Optional[str] = Field(None)
-    departure_date_end: Optional[str] = Field(None)
-    trip_duration_days: Optional[int] = Field(None)
-    limit_per_leg: int = Field(1)
 
 def get_intent_extraction_chain():
     """
