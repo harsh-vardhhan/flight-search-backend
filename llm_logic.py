@@ -3,9 +3,18 @@
 from datetime import date, timedelta
 import calendar
 from dotenv import load_dotenv
+import os
+
+# These environment variables need to be set before importing langchain or langgraph
+os.environ['LANGSMITH_OTEL_ENABLED'] = 'true'
+os.environ['LANGSMITH_TRACING'] = 'true'
+
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_ollama import ChatOllama
 import schemas  # <-- CORRECT: Import the schemas module
+
+import logfire
+logfire.configure()
 
 # Load environment variables
 load_dotenv()

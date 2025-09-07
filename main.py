@@ -13,6 +13,7 @@ import schemas
 import llm_logic
 from database import SessionLocal, engine
 from query_classifier import is_flight_related_query
+import logfire
 
 # Create database tables on startup
 models.Base.metadata.create_all(bind=engine)
@@ -37,6 +38,9 @@ async def lifespan(app: FastAPI):
 
 # Create the FastAPI app instance with the lifespan manager
 app = FastAPI(lifespan=lifespan)
+logfire.configure()  
+logfire.info('Hello, {name}!', name='world') 
+logfire.instrument_fastapi(app)
 
 # --- Dependency to get a database session for each request ---
 def get_db():
