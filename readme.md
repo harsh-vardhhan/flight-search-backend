@@ -74,7 +74,7 @@ A companion frontend for RupeeTravel is available at:
 
 3. **Run the API:**
    ```sh
-   uvicorn main:app --reload
+   uvicorn main:app --reload --host 0.0.0.0
    ```
 
 ## Environment Variables
