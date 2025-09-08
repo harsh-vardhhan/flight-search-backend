@@ -12,7 +12,7 @@ load_dotenv()
 
 # Your Ollama LLM initialization
 llm = ChatOllama(
-            model="qwen3:0.6b",
+            model="qwen3:1.7b",
             temperature=0.2,
         )
 
